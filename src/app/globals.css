@@ -1,0 +1,294 @@
+/* Updated: 2025-11-22T07:13:41.890Z */
+/* Updated: 2025-11-22T06:58:43.355Z */
+/* Updated: 2025-11-22T06:50:12.672Z */
+/* Updated: 2025-11-22T06:44:04.708Z */
+/* Updated: 2025-11-22T05:42:16.241Z */
+/* Updated: 2025-11-22T05:28:26.168Z */
+/* Updated: 2025-11-22T04:58:31.647Z */
+/* Updated: 2025-11-22T04:55:53.745Z */
+/* Updated: 2025-11-22T04:55:13.730Z */
+/* Updated: 2025-11-22T04:35:45.889Z */
+/* Updated: 2025-11-22T04:25:16.797Z */
+/* Updated: 2025-11-22T04:19:46.665Z */
+@import "tailwindcss";
+@import "tw-animate-css";
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  /* Shadcn/UI colors - Modified for dark theme */
+  --color-background: #0a0a0a;
+  --color-foreground: #ffffff;
+
+  --color-card: #242424;
+  --color-card-foreground: #ffffff;
+
+  --color-popover: #242424;
+  --color-popover-foreground: #ffffff;
+
+  --color-primary: #ff8516; /* Primary Orange */
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #1a1a1a; /* Background Mid */
+  --color-secondary-foreground: #ffffff;
+
+  --color-muted: #666666; /* Text Tertiary */
+  --color-muted-foreground: #a0a0a0; /* Text Secondary */
+
+  --color-accent: #1a1a1a; /* Background Mid */
+  --color-accent-foreground: #ff8516; /* Primary Orange */
+
+  --color-destructive: #ff3b30; /* Error Red */
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: #2a2a2a; /* Border Subtle */
+  --color-input: #1a1a1a; /* Input Background */
+  --color-ring: #ff8516; /* Primary Orange */
+
+  --color-chart-1: #ff8516; /* Primary Orange */
+  --color-chart-2: #00c853; /* Success Green */
+  --color-chart-3: #ff3b30; /* Error Red */
+  --color-chart-4: #a0a0a0; /* Text Secondary */
+  --color-chart-5: #666666; /* Text Tertiary */
+
+  /* Custom IQ Option colors */
+  --color-background-deep: #0a0a0a;
+  --color-background-mid: #1a1a1a;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a0a0a0;
+  --color-text-tertiary: #666666;
+  --color-orange-hover: #ff9933;
+  --color-success-green: #00c853;
+  --color-error-red: #ff3b30;
+  --color-border-subtle: #2a2a2a;
+  --color-border-medium: #3a3a3a;
+  --color-trustpilot-green: #00b67a;
+  --color-video-overlay: #00000099; /* rgba(0,0,0,0.6) */
+
+  /* Shadcn/UI radii */
+  --radius-lg: 1rem; /* 16px */
+  --radius-md: calc(1rem - 4px); /* 12px */
+  --radius-sm: calc(1rem - 8px); /* 8px */
+
+  /* Custom IQ Option radii */
+  --radius-xs: 0.25rem; /* 4px */
+  --radius-xl: 1.5rem; /* 24px */
+  --radius-2xl: 2rem; /* 32px */
+  --radius-full: 9999px;
+
+  /* Shadcn/UI animations */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+
+  /* Custom IQ Option fonts */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-display: var(--font-sans);
+  --font-body: var(--font-sans);
+}
+
+/*
+  The default border color has changed to currentColor in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border);
+  }
+}
+
+@layer utilities {
+  body {
+    font-family: var(--font-body);
+  }
+
+  /* Ticker scroll animation */
+  @keyframes scroll {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-scroll {
+    animation: scroll 40s linear infinite;
+  }
+}
+
+@layer base {
+  :root {
+    /* Shadcn/UI variables */
+    --background: var(--color-background);
+    --foreground: var(--color-foreground);
+    --card: var(--color-card);
+    --card-foreground: var(--color-card-foreground);
+    --popover: var(--color-popover);
+    --popover-foreground: var(--color-popover-foreground);
+    --primary: var(--color-primary);
+    --primary-foreground: var(--color-primary-foreground);
+    --secondary: var(--color-secondary);
+    --secondary-foreground: var(--color-secondary-foreground);
+    --muted: var(--color-muted);
+    --muted-foreground: var(--color-muted-foreground);
+    --accent: var(--color-accent);
+    --accent-foreground: var(--color-accent-foreground);
+    --destructive: var(--color-destructive);
+    --destructive-foreground: var(--color-destructive-foreground);
+    --border: var(--color-border);
+    --input: var(--color-input);
+    --ring: var(--color-ring);
+    --chart-1: var(--color-chart-1);
+    --chart-2: var(--color-chart-2);
+    --chart-3: var(--color-chart-3);
+    --chart-4: var(--color-chart-4);
+    --chart-5: var(--color-chart-5);
+    --radius: var(--radius-lg); /* Default radius for Shadcn components */
+
+    /* Custom IQ Option variables */
+    --background-deep: var(--color-background-deep);
+    --background-mid: var(--color-background-mid);
+    --text-primary: var(--color-text-primary);
+    --text-secondary: var(--color-text-secondary);
+    --text-tertiary: var(--color-text-tertiary);
+    --orange-hover: var(--color-orange-hover);
+    --success-green: var(--color-success-green);
+    --error-red: var(--color-error-red);
+    --border-subtle: var(--color-border-subtle);
+    --border-medium: var(--color-border-medium);
+    --trustpilot-green: var(--color-trustpilot-green);
+    --video-overlay: var(--color-video-overlay);
+
+    --radius-xs: var(--radius-xs);
+    --radius-sm: var(--radius-sm);
+    --radius-md: var(--radius-md);
+    --radius-lg: var(--radius-lg);
+    --radius-xl: var(--radius-xl);
+    --radius-2xl: var(--radius-2xl);
+    --radius-full: var(--radius-full);
+  }
+
+  /* Base typography and HTML tag styles */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    color: var(--text-primary);
+    line-height: 1.1;
+    font-weight: 700;
+  }
+
+  h1 { font-size: 72px; letter-spacing: -0.02em; }
+  h2 { font-size: 56px; letter-spacing: -0.01em; }
+  h3 { font-size: 48px; letter-spacing: -0.01em; }
+  h4 { font-size: 36px; font-weight: 600; }
+  h5 { font-size: 32px; font-weight: 600; }
+  h6 { font-size: 28px; font-weight: 600; }
+
+  p {
+    font-size: 18px;
+    color: var(--text-secondary);
+    margin-bottom: 1em;
+  }
+
+  a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.3s ease-in-out;
+  }
+
+  a:hover {
+    color: var(--orange-hover);
+  }
+
+  b, strong {
+    font-weight: 600;
+  }
+
+  .text-display-1 { font-size: 72px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+  .text-display-2 { font-size: 56px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; }
+  .text-display-3 { font-size: 48px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+  .text-display-4 { font-size: 36px; font-weight: 600; line-height: 1.2; letter-spacing: 0; }
+  .text-title-1 { font-size: 32px; font-weight: 600; line-height: 1.25; letter-spacing: 0; }
+  .text-title-2 { font-size: 28px; font-weight: 600; line-height: 1.3; letter-spacing: 0; }
+  .text-title-3 { font-size: 24px; font-weight: 600; line-height: 1.3; letter-spacing: 0; }
+  .text-title-4 { font-size: 20px; font-weight: 600; line-height: 1.4; letter-spacing: 0; }
+  .text-body-1 { font-size: 18px; font-weight: 400; line-height: 1.6; letter-spacing: 0; }
+  .text-body-2 { font-size: 16px; font-weight: 400; line-height: 1.6; letter-spacing: 0; }
+  .text-body-3 { font-size: 14px; font-weight: 400; line-height: 1.5; letter-spacing: 0; }
+  .text-caption { font-size: 12px; font-weight: 400; line-height: 1.4; letter-spacing: 0.01em; }
+  .text-button-lg { font-size: 18px; font-weight: 600; line-height: 1; letter-spacing: 0; }
+  .text-button-md { font-size: 16px; font-weight: 600; line-height: 1; letter-spacing: 0; }
+  .text-button-sm { font-size: 14px; font-weight: 600; line-height: 1; letter-spacing: 0; }
+
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 24px; /* Mobile horizontal padding */
+    padding-right: 24px; /* Mobile horizontal padding */
+  }
+
+  @media (min-width: 768px) {
+    .container {
+      padding-left: 48px; /* Tablet horizontal padding */
+      padding-right: 48px; /* Tablet horizontal padding */
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 64px; /* Desktop horizontal padding */
+      padding-right: 64px; /* Desktop horizontal padding */
+      max-width: 1440px; /* Main content max-width */
+    }
+  }
+
+  .container-text {
+    max-width: 1200px;
+  }
+
+  .container-narrow {
+    max-width: 960px;
+  }
+}
+
+/* Hide Next.js error overlay portal */
+nextjs-portal {
+  display: none !important;
+}

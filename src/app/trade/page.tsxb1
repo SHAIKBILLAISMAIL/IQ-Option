@@ -1,0 +1,1025 @@
+"use client";
+
+import { useEffect, useState, Suspense, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { authClient, useSession } from "@/lib/auth-client";
+import { toast } from "sonner";
+import Link from "next/link";
+import { 
+  TrendingUp, 
+  Search, 
+  ChevronDown, 
+  Bell, 
+  Star, 
+  Info, 
+  X, 
+  LogOut,
+  Plus,
+  Settings,
+  Newspaper,
+  Calendar,
+  Activity,
+  RefreshCw,
+  History,
+  DollarSign,
+  Minus,
+  Square
+} from "lucide-react";
+import { useBatchMarketData } from "@/hooks/useMarketData";
+import { DepositDialog } from "@/components/trading/deposit-dialog";
+import { TradingViewChart } from "@/components/trading/tradingview-chart"; // नया import
+
+// Asset categories with counts
+const categories = [
+  { id: "trending", name: "Trending", icon: "🔥", count: 0 },
+  { id: "options", name: "Options", icon: "⚡", count: 51 },
+  { id: "forex", name: "Forex", icon: "$", count: 42 },
+  { id: "stocks", name: "Stocks", icon: "🏢", count: 254 },
+  { id: "crypto", name: "Crypto", icon: "₿", count: 44 },
+  { id: "commodities", name: "Commodities", icon: "⚪", count: 9 },
+  { id: "indices", name: "Indices", icon: "📊", count: 12 },
+  { id: "etfs", name: "ETFs", icon: "📦", count: 27 },
+  { id: "watchlist", name: "Watchlist", icon: "⭐", count: 0 },
+];
+
+// Asset definitions with real API symbols
+const assetsDefinitions = {
+  indices: [
+    { name: "US 100", flag: "🇺🇸", symbol: "NASDAQ" },
+    { name: "US 30", flag: "🇺🇸", symbol: "DJI" },
+    { name: "US 2000", flag: "🇺🇸", symbol: "RUSSELL2000" },
+    { name: "US 500", flag: "🇺🇸", symbol: "SPX" },
+    { name: "GER 30", flag: "🇩🇪", symbol: "DAX" },
+    { name: "JP 225", flag: "🇯🇵", symbol: "NIKKEI" },
+    { name: "FR 40", flag: "🇫🇷", symbol: "CAC40" },
+    { name: "UK 100", flag: "🇬🇧", symbol: "FTSE" },
+  ],
+  forex: [
+    { name: "EUR/USD", flag: "🇪🇺", symbol: "EURUSD" },
+    { name: "GBP/USD", flag: "🇬🇧", symbol: "GBPUSD" },
+    { name: "USD/JPY", flag: "🇺🇸", symbol: "USDJPY" },
+    { name: "AUD/USD", flag: "🇦🇺", symbol: "AUDUSD" },
+    { name: "USD/CAD", flag: "🇺🇸", symbol: "USDCAD" },
+    { name: "USD/CHF", flag: "🇺🇸", symbol: "USDCHF" },
+  ],
+  crypto: [
+    { name: "Bitcoin", flag: "₿", symbol: "BINANCE:BTCUSDT" },
+    { name: "Ethereum", flag: "Ξ", symbol: "BINANCE:ETHUSDT" },
+    { name: "Ripple", flag: "✕", symbol: "BINANCE:XRPUSDT" },
+    { name: "Litecoin", flag: "Ł", symbol: "BINANCE:LTCUSDT" },
+    { name: "Cardano", flag: "₳", symbol: "BINANCE:ADAUSDT" },
+  ],
+  stocks: [
+    { name: "Apple", flag: "🇺🇸", symbol: "AAPL" },
+    { name: "Microsoft", flag: "🇺🇸", symbol: "MSFT" },
+    { name: "Tesla", flag: "🇺🇸", symbol: "TSLA" },
+    { name: "Amazon", flag: "🇺🇸", symbol: "AMZN" },
+    { name: "Google", flag: "🇺🇸", symbol: "GOOGL" },
+    { name: "Meta", flag: "🇺🇸", symbol: "META" },
+  ],
+};
+
+type AssetWithPrice = {
+  name: string;
+  flag: string;
+  symbol: string;
+  sell: number;
+  buy: number;
+  spread: number;
+  change: number;
+  positive: boolean;
+};
+
+type Trade = {
+  id: number;
+  asset: string;
+  direction: "buy" | "sell";
+  amount: number;
+  entryPrice: number;
+  currentPrice: number;
+  quantity: number;
+  pnl: number;
+  timestamp: string;
+  dbId?: number;
+};
+
+type HistoryTrade = {
+  id: number;
+  asset: string;
+  direction: "buy" | "sell";
+  amount: number;
+  entryPrice: number;
+  exitPrice: number;
+  pnl: number;
+  openedAt: string;
+  closedAt: string;
+};
+
+function TradeContent() {
+  const { data: session, isPending, refetch } = useSession();
+  const router = useRouter();
+  
+  const [selectedCategory, setSelectedCategory] = useState("indices");
+  const [selectedAsset, setSelectedAsset] = useState<AssetWithPrice | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [balance, setBalance] = useState(10000);
+  const [realBalance, setRealBalance] = useState(0);
+  const [accountType, setAccountType] = useState<"practice" | "real">("practice");
+  const [bottomTab, setBottomTab] = useState("positions");
+  const [positions, setPositions] = useState<Trade[]>([]);
+  const [history, setHistory] = useState<HistoryTrade[]>([]);
+  const [tradeAmount, setTradeAmount] = useState(100);
+  const [leverage, setLeverage] = useState(1);
+  const [depositDialogOpen, setDepositDialogOpen] = useState(false);
+  const [chartInterval, setChartInterval] = useState("60");
+  const [rightTab, setRightTab] = useState<"information" | "news">("information"); // Missing state added
+
+  // Get all symbols for the current category
+  const currentSymbols = assetsDefinitions[selectedCategory as keyof typeof assetsDefinitions] || assetsDefinitions.indices;
+  const symbolNames = currentSymbols.map(s => s.name);
+
+  // Fetch real-time market data
+  const { data: marketData, loading: marketLoading, error: marketError, refetch: refetchMarket } = useBatchMarketData(symbolNames, 5000);
+
+  // Load user balance on mount
+  useEffect(() => {
+    if (session?.user) {
+      loadUserBalance();
+      loadOpenPositions();
+      loadTradingHistory();
+    }
+  }, [session]);
+
+  const loadUserBalance = async () => {
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const response = await fetch("/api/user/balance", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setBalance(data.balance || 10000);
+        setRealBalance(data.realBalance || 0);
+      } else if (response.status === 404) {
+        // Create balance if not exists
+        await fetch("/api/user/balance", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setBalance(10000);
+        setRealBalance(0);
+      }
+    } catch (error) {
+      console.error("Failed to load balance:", error);
+    }
+  };
+
+  const loadOpenPositions = async () => {
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const response = await fetch(`/api/trades?account_type=${accountType}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const mappedPositions: Trade[] = data.map((trade: any) => ({
+          id: Date.now() + Math.random(),
+          dbId: trade.id,
+          asset: trade.assetName,
+          direction: trade.direction,
+          amount: trade.amount,
+          entryPrice: trade.entryPrice,
+          currentPrice: trade.currentPrice,
+          quantity: trade.quantity,
+          pnl: trade.pnl,
+          timestamp: new Date(trade.openedAt).toLocaleTimeString(),
+        }));
+        setPositions(mappedPositions);
+      }
+    } catch (error) {
+      console.error("Failed to load positions:", error);
+    }
+  };
+
+  const loadTradingHistory = async () => {
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const response = await fetch(`/api/trading-history?account_type=${accountType}&limit=20`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const mappedHistory: HistoryTrade[] = data.map((trade: any) => ({
+          id: trade.id,
+          asset: trade.assetName,
+          direction: trade.direction,
+          amount: trade.amount,
+          entryPrice: trade.entryPrice,
+          exitPrice: trade.exitPrice,
+          pnl: trade.pnl,
+          openedAt: new Date(trade.openedAt).toLocaleString(),
+          closedAt: new Date(trade.closedAt).toLocaleString(),
+        }));
+        setHistory(mappedHistory);
+      }
+    } catch (error) {
+      console.error("Failed to load history:", error);
+    }
+  };
+
+  // Convert market data to asset format
+  const currentAssets: AssetWithPrice[] = currentSymbols.map(asset => {
+    const data = marketData[asset.name];
+    
+    if (data) {
+      return {
+        name: asset.name,
+        flag: asset.flag,
+        symbol: asset.symbol,
+        sell: data.bid,
+        buy: data.ask,
+        spread: data.spread,
+        change: data.changePercent,
+        positive: data.change >= 0,
+      };
+    }
+    
+    return {
+      name: asset.name,
+      flag: asset.flag,
+      symbol: asset.symbol,
+      sell: 0,
+      buy: 0,
+      spread: 0,
+      change: 0,
+      positive: true,
+    };
+  });
+
+  // Set initial selected asset
+  useEffect(() => {
+    if (currentAssets.length > 0 && !selectedAsset) {
+      setSelectedAsset(currentAssets[0]);
+    }
+  }, [currentAssets, selectedAsset]);
+
+  // Update selected asset with new data
+  useEffect(() => {
+    if (selectedAsset && marketData[selectedAsset.name]) {
+      const updatedData = marketData[selectedAsset.name];
+      if (updatedData) {
+        setSelectedAsset({
+          name: selectedAsset.name,
+          flag: selectedAsset.flag,
+          symbol: selectedAsset.symbol,
+          sell: updatedData.bid,
+          buy: updatedData.ask,
+          spread: updatedData.spread,
+          change: updatedData.changePercent,
+          positive: updatedData.change >= 0,
+        });
+      }
+    }
+  }, [marketData, selectedAsset]);
+
+  // Calculate total P&L
+  const totalPnL = positions.reduce((sum, pos) => sum + pos.pnl, 0);
+  const currentBalance = accountType === "practice" ? balance : realBalance;
+
+  const handleSignOut = async () => {
+    const { error } = await authClient.signOut();
+    if (error?.code) {
+      toast.error("Sign out failed");
+    } else {
+      localStorage.removeItem("bearer_token");
+      refetch();
+      toast.success("Signed out successfully");
+      router.push("/");
+    }
+  };
+
+  const handleTrade = async (direction: "buy" | "sell") => {
+    if (!selectedAsset || selectedAsset.buy === 0) {
+      toast.error("Please wait for market data to load");
+      return;
+    }
+
+    if (tradeAmount > currentBalance) {
+      toast.error("Insufficient balance");
+      return;
+    }
+
+    const entryPrice = direction === "buy" ? selectedAsset.buy : selectedAsset.sell;
+    const currentPrice = entryPrice;
+    const quantity = tradeAmount / entryPrice;
+
+    try {
+      const token = localStorage.getItem("bearer_token");
+      
+      // Save to database
+      const response = await fetch("/api/trades", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          assetName: selectedAsset.name,
+          assetType: selectedCategory,
+          direction,
+          amount: tradeAmount,
+          entryPrice,
+          currentPrice,
+          quantity,
+          leverage,
+          accountType,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to open position");
+      }
+
+      const trade = await response.json();
+
+      const newPosition: Trade = {
+        id: Date.now(),
+        dbId: trade.id,
+        asset: selectedAsset.name,
+        direction,
+        amount: tradeAmount,
+        entryPrice,
+        currentPrice,
+        quantity,
+        pnl: 0,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      
+      setPositions([...positions, newPosition]);
+      
+      // Update balance
+      const newBalance = currentBalance - tradeAmount;
+      if (accountType === "practice") {
+        setBalance(newBalance);
+      } else {
+        setRealBalance(newBalance);
+      }
+
+      await fetch("/api/user/balance", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          [accountType === "practice" ? "balance" : "realBalance"]: newBalance,
+        }),
+      });
+
+      toast.success(`${direction.toUpperCase()} position opened for ${selectedAsset.name}`);
+    } catch (error) {
+      console.error("Trade error:", error);
+      toast.error("Failed to open position");
+    }
+  };
+
+  const closePosition = async (position: Trade) => {
+    if (!position.dbId) {
+      toast.error("Invalid position");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const exitPrice = position.currentPrice;
+
+      const response = await fetch(`/api/trades/${position.dbId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          exitPrice,
+          pnl: position.pnl,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to close position");
+      }
+
+      // Update balance
+      const newBalance = currentBalance + position.amount + position.pnl;
+      if (accountType === "practice") {
+        setBalance(newBalance);
+      } else {
+        setRealBalance(newBalance);
+      }
+
+      await fetch("/api/user/balance", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          [accountType === "practice" ? "balance" : "realBalance"]: newBalance,
+        }),
+      });
+
+      setPositions(positions.filter(p => p.id !== position.id));
+      
+      if (position.pnl > 0) {
+        toast.success(`Position closed with profit: +$${position.pnl.toFixed(2)}`);
+      } else {
+        toast.error(`Position closed with loss: $${position.pnl.toFixed(2)}`);
+      }
+
+      // Reload history
+      loadTradingHistory();
+    } catch (error) {
+      console.error("Close position error:", error);
+      toast.error("Failed to close position");
+    }
+  };
+
+  const handleDepositSuccess = (amount: number) => {
+    setRealBalance(prev => prev + amount);
+    loadUserBalance();
+  };
+
+  if (isPending) {
+    return (
+      <div className="min-h-screen bg-[#1a1d29] flex items-center justify-center">
+        <div className="text-white text-xl">Loading platform...</div>
+      </div>
+    );
+  }
+
+  if (!session?.user) {
+    router.push("/login?redirect=/trade");
+    return null;
+  }
+
+  const filteredAssets = searchQuery
+    ? currentAssets.filter(asset => 
+        asset.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : currentAssets;
+
+  return (
+    <div className="min-h-screen bg-[#1a1d29] text-white">
+      {/* Deposit Dialog */}
+      <DepositDialog
+        open={depositDialogOpen}
+        onOpenChange={setDepositDialogOpen}
+        onDepositSuccess={handleDepositSuccess}
+      />
+
+      {/* Top Navigation Bar */}
+      <header className="bg-[#0d0f15] border-b border-[#2a2d3a] h-14 flex items-center px-4">
+        <Link href="/" className="flex items-center gap-2 mr-6">
+          <div className="w-6 h-6 bg-[#ff8516] rounded flex items-center justify-center">
+            <span className="text-white font-bold text-sm">Q</span>
+          </div>
+          <span className="font-semibold text-sm">quadcode markets</span>
+        </Link>
+
+        {/* Asset Tabs */}
+        <div className="flex items-center gap-1 flex-1 overflow-x-auto">
+          {selectedAsset && (
+            <button className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1d29] rounded text-sm">
+              <span>{selectedAsset.flag}</span>
+              <span>{selectedAsset.name}</span>
+              <X size={14} />
+            </button>
+          )}
+          <button className="p-1.5 hover:bg-[#1a1d29] rounded">
+            <Plus size={16} />
+          </button>
+        </div>
+
+        {/* Account Type Toggle */}
+        <div className="flex items-center gap-2 mr-4 bg-[#1a1d29] rounded-lg p-1">
+          <button
+            onClick={() => setAccountType("practice")}
+            className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+              accountType === "practice" ? "bg-[#ff8516] text-white" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Practice
+          </button>
+          <button
+            onClick={() => setAccountType("real")}
+            className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+              accountType === "real" ? "bg-[#00c853] text-white" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Real
+          </button>
+        </div>
+
+        {/* Market Status */}
+        <div className="flex items-center gap-2 mr-4">
+          <div className={`w-2 h-2 rounded-full ${marketLoading ? 'bg-yellow-500 animate-pulse' : marketError ? 'bg-red-500' : 'bg-green-500'}`}></div>
+          <span className="text-xs text-gray-400">
+            {marketLoading ? 'Connecting...' : marketError ? 'Offline' : 'Live Market'}
+          </span>
+          <button
+            onClick={() => refetchMarket()}
+            className="p-1 hover:bg-[#1a1d29] rounded"
+            title="Refresh"
+          >
+            <RefreshCw size={14} className={marketLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+
+        {/* User Info */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-[#ff8516] rounded-full flex items-center justify-center text-white font-semibold text-sm">
+              {session?.user?.email?.[0]?.toUpperCase() || 'U'}
+            </div>
+            <div className="text-right">
+              <div className={`text-sm font-bold ${accountType === "practice" ? "text-[#ff8516]" : "text-[#00c853]"}`}>
+                ${currentBalance.toFixed(2)}
+              </div>
+              <div className={`text-xs ${totalPnL >= 0 ? "text-[#00c853]" : "text-[#ff3b30]"}`}>
+                P/L: {totalPnL >= 0 ? "+" : ""}${totalPnL.toFixed(2)}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setDepositDialogOpen(true)}
+            className="px-4 py-1.5 bg-[#00c853] hover:bg-[#00d65f] rounded text-sm font-semibold flex items-center gap-2"
+          >
+            <DollarSign size={16} />
+            Deposit
+          </button>
+          <button onClick={handleSignOut} className="p-2 hover:bg-[#1a1d29] rounded" title="Sign Out">
+            <LogOut size={18} />
+          </button>
+        </div>
+      </header>
+
+      <div className="flex h-[calc(100vh-56px)]">
+        {/* Left Sidebar - Chart Controls */}
+        <div className="w-16 bg-[#0d0f15] border-r border-[#2a2d3a] flex flex-col items-center py-4 gap-4">
+          <button className="p-2 hover:bg-[#1a1d29] rounded" title="Trade">
+            <Plus size={20} />
+          </button>
+          <button className="p-2 bg-[#1a1d29] rounded" title="Chart Type">
+            <Activity size={20} />
+          </button>
+          <div className="flex flex-col gap-1 my-4">
+            <button 
+              onClick={() => setChartInterval("1")}
+              className={`px-2 py-1 text-xs rounded ${chartInterval === "1" ? "bg-[#ff8516] text-white" : "hover:bg-[#1a1d29]"}`}
+            >
+              1m
+            </button>
+            <button 
+              onClick={() => setChartInterval("60")}
+              className={`px-2 py-1 text-xs rounded ${chartInterval === "60" ? "bg-[#ff8516] text-white" : "hover:bg-[#1a1d29]"}`}
+            >
+              1h
+            </button>
+            <button 
+              onClick={() => setChartInterval("D")}
+              className={`px-2 py-1 text-xs rounded ${chartInterval === "D" ? "bg-[#ff8516] text-white" : "hover:bg-[#1a1d29]"}`}
+            >
+              1d
+            </button>
+          </div>
+          <button className="p-2 hover:bg-[#1a1d29] rounded mt-auto" title="Settings">
+            <Settings size={20} />
+          </button>
+        </div>
+
+        {/* Chart Area + Categories */}
+        <div className="flex-1 flex flex-col">
+          {/* Asset Info Bar */}
+          {selectedAsset && (
+            <div className="bg-[#0d0f15] border-b border-[#2a2d3a] px-6 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{selectedAsset.flag}</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-lg">{selectedAsset.name}</span>
+                      <ChevronDown size={16} />
+                    </div>
+                    <div className="text-xs text-gray-400 capitalize">{selectedCategory}</div>
+                  </div>
+                </div>
+                <button className="p-2 hover:bg-[#1a1d29] rounded">
+                  <Info size={18} />
+                </button>
+                <button className="p-2 hover:bg-[#1a1d29] rounded">
+                  <Bell size={18} />
+                </button>
+                <button className="p-2 hover:bg-[#1a1d29] rounded">
+                  <Star size={18} />
+                </button>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <div className="text-xs text-gray-400">Spread</div>
+                  <div className="font-semibold">
+                    {selectedAsset.buy > 0 ? selectedAsset.spread.toFixed(4) : '--'}
+                  </div>
+                </div>
+                <div className="h-8 w-px bg-[#2a2d3a]"></div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">Buy</div>
+                  <div className="text-[#00c853] font-bold text-lg">
+                    {selectedAsset.buy > 0 ? selectedAsset.buy.toFixed(selectedAsset.buy > 100 ? 2 : 5) : 'Loading...'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Main Chart - YAHAN TRADINGVIEW CHART ADD KIYA HAI */}
+          <div className="flex-1 bg-[#131722] relative">
+            {selectedAsset ? (
+              <TradingViewChart 
+                symbol={selectedAsset.symbol} 
+                interval={chartInterval}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400">
+                <div className="text-center">
+                  <Activity size={48} className="mx-auto mb-4" />
+                  <div className="text-lg">Select an asset to view chart</div>
+                </div>
+              </div>
+            )}
+            
+            {/* Trading Controls Overlay */}
+            {selectedAsset && (
+              <div className="absolute bottom-4 right-4 bg-[#1a1d29]/95 backdrop-blur-sm rounded-lg p-4 w-80 border border-[#2a2d3a] z-10">
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-400 block mb-1">Invest</label>
+                      <input
+                        type="number"
+                        value={tradeAmount}
+                        onChange={(e) => setTradeAmount(Number(e.target.value))}
+                        className="w-full px-3 py-2 bg-[#0d0f15] border border-[#2a2d3a] rounded text-white focus:outline-none focus:border-[#ff8516]"
+                      />
+                    </div>
+                    <div className="w-24">
+                      <label className="text-xs text-gray-400 block mb-1">Leverage</label>
+                      <select
+                        value={leverage}
+                        onChange={(e) => setLeverage(Number(e.target.value))}
+                        className="w-full px-2 py-2 bg-[#0d0f15] border border-[#2a2d3a] rounded text-white focus:outline-none focus:border-[#ff8516]"
+                      >
+                        <option value={1}>x1</option>
+                        <option value={2}>x2</option>
+                        <option value={5}>x5</option>
+                        <option value={10}>x10</option>
+                        <option value={20}>x20</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleTrade("sell")}
+                      disabled={selectedAsset.sell === 0}
+                      className="py-3 bg-[#ff3b30] hover:bg-[#ff5545] rounded font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <div className="text-xs text-white/70 mb-1">SELL</div>
+                      <div>{selectedAsset.sell > 0 ? selectedAsset.sell.toFixed(selectedAsset.sell > 100 ? 2 : 5) : '...'}</div>
+                    </button>
+                    <button
+                      onClick={() => handleTrade("buy")}
+                      disabled={selectedAsset.buy === 0}
+                      className="py-3 bg-[#00c853] hover:bg-[#00d65f] rounded font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <div className="text-xs text-white/70 mb-1">BUY</div>
+                      <div>{selectedAsset.buy > 0 ? selectedAsset.buy.toFixed(selectedAsset.buy > 100 ? 2 : 5) : '...'}</div>
+                    </button>
+                  </div>
+
+                  <div className="text-xs text-gray-500 text-center">
+                    Spread: {selectedAsset.buy > 0 ? selectedAsset.spread.toFixed(4) : '--'}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Tabs - Positions & History */}
+          <div className="bg-[#0d0f15] border-t border-[#2a2d3a]">
+            <div className="flex items-center gap-4 px-4 border-b border-[#2a2d3a]">
+              <button
+                onClick={() => setBottomTab("positions")}
+                className={`py-3 text-sm font-semibold border-b-2 transition-colors ${
+                  bottomTab === "positions"
+                    ? "text-[#ff8516] border-[#ff8516]"
+                    : "text-gray-400 border-transparent hover:text-white"
+                }`}
+              >
+                Open Positions ({positions.length})
+              </button>
+              <button
+                onClick={() => setBottomTab("history")}
+                className={`py-3 text-sm font-semibold border-b-2 transition-colors ${
+                  bottomTab === "history"
+                    ? "text-[#ff8516] border-[#ff8516]"
+                    : "text-gray-400 border-transparent hover:text-white"
+                }`}
+              >
+                Trading History
+              </button>
+            </div>
+
+            <div className="max-h-60 overflow-y-auto">
+              {bottomTab === "positions" && (
+                <div className="p-4">
+                  {positions.length === 0 ? (
+                    <div className="text-center text-gray-500 py-8">
+                      No open positions
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {positions.map((position) => (
+                        <div
+                          key={position.id}
+                          className="flex items-center justify-between bg-[#1a1d29] rounded p-3 text-sm"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                position.direction === "buy"
+                                  ? "bg-[#00c853]/20 text-[#00c853]"
+                                  : "bg-[#ff3b30]/20 text-[#ff3b30]"
+                              }`}
+                            >
+                              {position.direction.toUpperCase()}
+                            </div>
+                            <span className="font-semibold">{position.asset}</span>
+                            <span className="text-gray-400">Qty: {position.quantity.toFixed(4)}</span>
+                            <span className="text-gray-400">Entry: {position.entryPrice.toFixed(3)}</span>
+                            <span className="text-gray-400">Current: {position.currentPrice.toFixed(3)}</span>
+                            <span
+                              className={`font-bold ${
+                                position.pnl >= 0 ? "text-[#00c853]" : "text-[#ff3b30]"
+                              }`}
+                            >
+                              {position.pnl >= 0 ? "+" : ""}${position.pnl.toFixed(2)}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => closePosition(position)}
+                            className="px-4 py-1.5 bg-[#ff8516] hover:bg-[#ff9933] rounded text-xs font-semibold"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {bottomTab === "history" && (
+                <div className="p-4">
+                  {history.length === 0 ? (
+                    <div className="text-center text-gray-500 py-8">
+                      No trading history
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {history.map((trade) => (
+                        <div
+                          key={trade.id}
+                          className="flex items-center justify-between bg-[#1a1d29] rounded p-3 text-sm"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                trade.direction === "buy"
+                                  ? "bg-[#00c853]/20 text-[#00c853]"
+                                  : "bg-[#ff3b30]/20 text-[#ff3b30]"
+                              }`}
+                            >
+                              {trade.direction.toUpperCase()}
+                            </div>
+                            <span className="font-semibold">{trade.asset}</span>
+                            <span className="text-gray-400">Entry: {trade.entryPrice.toFixed(3)}</span>
+                            <span className="text-gray-400">Exit: {trade.exitPrice.toFixed(3)}</span>
+                            <span className="text-gray-400 text-xs">{trade.closedAt}</span>
+                          </div>
+                          <span
+                            className={`font-bold ${
+                              trade.pnl >= 0 ? "text-[#00c853]" : "text-[#ff3b30]"
+                            }`}
+                          >
+                            {trade.pnl >= 0 ? "+" : ""}${trade.pnl.toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Sidebar - Assets List */}
+        <div className="w-[420px] bg-[#0d0f15] border-l border-[#2a2d3a] flex flex-col">
+          {/* Search Bar */}
+          <div className="p-4 border-b border-[#2a2d3a]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search by name or ticker"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-[#1a1d29] border border-[#2a2d3a] rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#ff8516]"
+              />
+            </div>
+          </div>
+
+          {/* Categories */}
+          <div className="flex-shrink-0 border-b border-[#2a2d3a]">
+            <div className="flex items-center justify-between px-4 py-2 text-xs text-gray-400">
+              <button className="flex items-center gap-1">
+                Sort by Popularity <ChevronDown size={14} />
+              </button>
+              <div className="flex gap-6">
+                <span>Sell</span>
+                <span>Buy</span>
+                <span>Spread</span>
+                <span>Change</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-y-auto flex-1">
+            {/* Category Buttons */}
+            <div className="sticky top-0 bg-[#0d0f15] border-b border-[#2a2d3a] z-10">
+              {categories.map((category) => (
+                <button
+                  key={category.id}
+                  onClick={() => setSelectedCategory(category.id)}
+                  className={`w-full flex items-center justify-between px-4 py-3 hover:bg-[#1a1d29] transition-colors ${
+                    selectedCategory === category.id ? "bg-[#1a1d29]" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{category.icon}</span>
+                    <span className="font-medium text-sm">{category.name}</span>
+                  </div>
+                  {category.count > 0 && (
+                    <span className="px-2 py-0.5 bg-[#2a2d3a] rounded-full text-xs">
+                      {category.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Assets List */}
+            <div>
+              {marketLoading && filteredAssets.length === 0 ? (
+                <div className="p-8 text-center text-gray-400">
+                  <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
+                  <p>Loading market data...</p>
+                </div>
+              ) : filteredAssets.length === 0 ? (
+                <div className="p-8 text-center text-gray-400">
+                  No assets found
+                </div>
+              ) : (
+                filteredAssets.map((asset, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedAsset(asset)}
+                    className={`w-full px-4 py-3 flex items-center justify-between hover:bg-[#1a1d29] transition-colors border-b border-[#2a2d3a] ${
+                      selectedAsset?.name === asset.name ? "bg-[#1a1d29]" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <span className="text-2xl">{asset.flag}</span>
+                      <span className="font-semibold text-sm">{asset.name}</span>
+                    </div>
+                    <div className="flex items-center gap-6 text-sm">
+                      <span>{asset.sell > 0 ? asset.sell.toFixed(asset.sell > 100 ? 2 : 4) : '--'}</span>
+                      <span>{asset.buy > 0 ? asset.buy.toFixed(asset.buy > 100 ? 2 : 4) : '--'}</span>
+                      <span className="w-12 text-center">{asset.spread > 0 ? asset.spread.toFixed(4) : '--'}</span>
+                      <span className={`w-16 text-right font-semibold ${
+                        asset.positive ? "text-[#00c853]" : "text-[#ff3b30]"
+                      }`}>
+                        {asset.change !== 0 ? `${asset.positive ? "+" : ""}${asset.change.toFixed(2)}%` : '--'}
+                      </span>
+                      <div className="flex gap-2">
+                        <button className="p-1 hover:bg-[#2a2d3a] rounded">
+                          <Bell size={14} className="text-gray-400" />
+                        </button>
+                        <button className="p-1 hover:bg-[#2a2d3a] rounded">
+                          <Star size={14} className="text-gray-400" />
+                        </button>
+                        <button className="p-1 hover:bg-[#2a2d3a] rounded">
+                          <Info size={14} className="text-gray-400" />
+                        </button>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Right Tabs */}
+          <div className="border-t border-[#2a2d3a] bg-[#0d0f15]">
+            <div className="flex border-b border-[#2a2d3a]">
+              <button
+                onClick={() => setRightTab("information")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm ${
+                  rightTab === "information" ? "text-[#ff8516] border-b-2 border-[#ff8516]" : "text-gray-400"
+                }`}
+              >
+                <Info size={16} />
+                Information
+              </button>
+              <button
+                onClick={() => setRightTab("news")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm ${
+                  rightTab === "news" ? "text-[#ff8516] border-b-2 border-[#ff8516]" : "text-gray-400"
+                }`}
+              >
+                <Newspaper size={16} />
+                News
+              </button>
+            </div>
+            <div className="p-4 h-48 overflow-y-auto">
+              {rightTab === "information" && selectedAsset && (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Asset:</span>
+                    <span>{selectedAsset.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Type:</span>
+                    <span className="capitalize">{selectedCategory}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Current Price:</span>
+                    <span>{selectedAsset.buy > 0 ? `$${((selectedAsset.buy + selectedAsset.sell) / 2).toFixed(4)}` : 'Loading...'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">24h Change:</span>
+                    <span className={selectedAsset.positive ? "text-[#00c853]" : "text-[#ff3b30]"}>
+                      {selectedAsset.change !== 0 ? `${selectedAsset.positive ? "+" : ""}${selectedAsset.change.toFixed(2)}%` : '--'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Trading Hours:</span>
+                    <span>24/7</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Max Leverage:</span>
+                    <span>1:20</span>
+                  </div>
+                </div>
+              )}
+              {rightTab === "news" && (
+                <div className="text-sm text-gray-400">
+                  No recent news for this asset.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function TradePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#1a1d29] flex items-center justify-center">
+        <div className="text-white text-xl">Loading platform...</div>
+      </div>
+    }>
+      <TradeContent />
+    </Suspense>
+  );
+}

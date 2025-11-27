@@ -1,0 +1,48 @@
+{
+  "name": "IQ Option - Trading Platform",
+  "short_name": "IQ Option",
+  "description": "Professional trading platform with advanced tools, real-time charts, and educational resources. Trade forex, stocks, commodities, and more.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#ff8516",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/project-uploads/a9d01dcc-d202-4296-8a1e-f1e869ef1166/generated_images/iq-option-trading-app-icon-logo-circular-31f08cab-20251122044009.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/project-uploads/a9d01dcc-d202-4296-8a1e-f1e869ef1166/generated_images/iq-option-trading-app-icon-logo-circular-31f08cab-20251122044009.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Start Trading",
+      "short_name": "Trade",
+      "description": "Open the trading platform",
+      "url": "/trade",
+      "icons": [{ 
+        "src": "https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/project-uploads/a9d01dcc-d202-4296-8a1e-f1e869ef1166/generated_images/iq-option-trading-app-icon-logo-circular-31f08cab-20251122044009.jpg", 
+        "sizes": "192x192" 
+      }]
+    },
+    {
+      "name": "Demo Account",
+      "short_name": "Demo",
+      "description": "Try demo trading with virtual funds",
+      "url": "/trade?demo=true",
+      "icons": [{ 
+        "src": "https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/project-uploads/a9d01dcc-d202-4296-8a1e-f1e869ef1166/generated_images/iq-option-trading-app-icon-logo-circular-31f08cab-20251122044009.jpg", 
+        "sizes": "192x192" 
+      }]
+    }
+  ]
+}
