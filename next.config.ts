@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
     ],
     unoptimized: process.env.NODE_ENV === 'production',
   },
-  outputFileTracingRoot: path.resolve(__dirname, '../../'),
+  // outputFileTracingRoot: path.resolve(__dirname, '../../'),
   typescript: {
     ignoreBuildErrors: true,
   },
