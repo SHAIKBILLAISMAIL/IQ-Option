@@ -7,9 +7,9 @@ type UseMarketDataOptions = {
   refreshInterval?: number; // in milliseconds
 };
 
-// Helper to add small random variance to price (0.005% to 0.02%)
+// Helper to add visible random variance to price (0.01% to 0.05%) - increased for visibility
 const addNoise = (price: number) => {
-  const variance = price * (0.00005 + Math.random() * 0.00015);
+  const variance = price * (0.0001 + Math.random() * 0.0004);
   return Math.random() > 0.5 ? price + variance : price - variance;
 };
 
@@ -48,7 +48,7 @@ export function useMarketData({ symbol, enabled = true, refreshInterval = 5000 }
     // Stop previous simulation
     if (simulationRef.current) clearInterval(simulationRef.current);
 
-    // Start new simulation to make price "alive"
+    // Start new simulation to make price "alive" - faster updates
     simulationRef.current = setInterval(() => {
       setData(prev => {
         if (!prev) return null;
@@ -63,7 +63,7 @@ export function useMarketData({ symbol, enabled = true, refreshInterval = 5000 }
           timestamp: Date.now(),
         };
       });
-    }, 200); // Update every 200ms
+    }, 100); // Update every 100ms (10x per second)
 
     return () => {
       if (simulationRef.current) clearInterval(simulationRef.current);
@@ -144,8 +144,8 @@ export function useBatchMarketData(symbols: string[], refreshInterval: number = 
         Object.keys(next).forEach(key => {
           const asset = next[key];
           if (asset) {
-            // Increased variance for better visibility (0.01% to 0.03%)
-            const variance = asset.price * (0.0001 + Math.random() * 0.0002);
+            // Increased variance for better visibility (0.02% to 0.06%)
+            const variance = asset.price * (0.0002 + Math.random() * 0.0004);
             const newPrice = Math.random() > 0.5 ? asset.price + variance : asset.price - variance;
 
             const spread = asset.spread || (newPrice * 0.0002);
@@ -162,7 +162,7 @@ export function useBatchMarketData(symbols: string[], refreshInterval: number = 
 
         return changed ? next : prev;
       });
-    }, 200); // 200ms updates
+    }, 100); // 100ms updates (10x per second)
 
     return () => {
       if (simulationRef.current) clearInterval(simulationRef.current);

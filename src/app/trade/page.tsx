@@ -42,6 +42,8 @@ import { Button as UiButton } from "@/components/ui/button";
 import { DepositDialog } from "@/components/trading/deposit-dialog";
 import { WithdrawDialog } from "@/components/trading/withdraw-dialog";
 import { TradingViewChart } from "@/components/trading/tradingview-chart";
+import { LiveLineChart } from "@/components/trading/live-line-chart";
+import { WinLossPopup } from "@/components/trading/win-loss-popup";
 
 const resolveAssetType = (category: string): "indices" | "forex" | "stocks" | "crypto" | "commodities" => {
   switch (category) {
@@ -98,6 +100,7 @@ type Trade = {
   pnl: number;
   timestamp: string;
   dbId?: number;
+  expiresAt?: number;
 };
 
 type HistoryTrade = {
@@ -132,6 +135,18 @@ function TradeContent() {
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [chartInterval, setChartInterval] = useState("60");
   const [rightTab, setRightTab] = useState<"information" | "news">("information");
+  const [duration, setDuration] = useState(1); // Default 1 minute
+  const [popupState, setPopupState] = useState<{
+    isOpen: boolean;
+    result: "win" | "loss";
+    amount: number;
+    asset: string;
+  }>({
+    isOpen: false,
+    result: "win",
+    amount: 0,
+    asset: "",
+  });
 
   // Add this state to track open tabs
   const [openTabs, setOpenTabs] = useState<AssetWithPrice[]>([]);
@@ -328,7 +343,106 @@ function TradeContent() {
     if (tradeAmount > currentBalance) {
       setTradeAmount(Number(currentBalance.toFixed(2)));
     }
-  }, [currentBalance]);
+  }, [currentBalance, tradeAmount]);
+
+  // Check for expired trades
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+
+      setPositions(prevPositions => {
+        const activePositions: Trade[] = [];
+        const expiredPositions: Trade[] = [];
+
+        prevPositions.forEach(pos => {
+          if (pos.expiresAt && pos.expiresAt <= now) {
+            expiredPositions.push(pos);
+          } else {
+            activePositions.push(pos);
+          }
+        });
+
+        if (expiredPositions.length > 0) {
+          expiredPositions.forEach(pos => {
+            // Calculate result
+            const isWin = pos.direction === 'buy'
+              ? pos.currentPrice > pos.entryPrice
+              : pos.currentPrice < pos.entryPrice;
+
+            const profit = isWin ? pos.amount * 0.85 : 0; // 85% profit
+            const totalReturn = isWin ? pos.amount + profit : 0;
+
+            // Show popup
+            setPopupState({
+              isOpen: true,
+              result: isWin ? "win" : "loss",
+              amount: isWin ? profit : pos.amount,
+              asset: pos.asset
+            });
+
+            // Update balance if win
+            if (isWin) {
+              const newBalance = (accountType === "practice" ? balance : realBalance) + totalReturn;
+              if (accountType === "practice") {
+                setBalance(newBalance);
+              } else {
+                setRealBalance(newBalance);
+              }
+
+              // Sync with server
+              const token = localStorage.getItem("bearer_token");
+              fetch("/api/user/balance", {
+                method: "PUT",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  [accountType === "practice" ? "balance" : "realBalance"]: newBalance,
+                }),
+              });
+            }
+
+            // Add to history
+            const historyItem: HistoryTrade = {
+              id: pos.id,
+              asset: pos.asset,
+              direction: pos.direction,
+              amount: pos.amount,
+              entryPrice: pos.entryPrice,
+              exitPrice: pos.currentPrice,
+              pnl: isWin ? profit : -pos.amount,
+              openedAt: pos.timestamp,
+              closedAt: new Date().toLocaleTimeString()
+            };
+            setHistory(prev => [historyItem, ...prev]);
+
+            // Close trade on server
+            if (pos.dbId) {
+              const token = localStorage.getItem("bearer_token");
+              fetch(`/api/trades/${pos.dbId}`, {
+                method: "DELETE",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  exitPrice: pos.currentPrice,
+                  pnl: isWin ? profit : -pos.amount,
+                }),
+              }).catch(err => console.error("Failed to close trade on server:", err));
+            }
+          });
+
+          return activePositions;
+        }
+
+        return prevPositions;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [positions, balance, realBalance, accountType]);
 
   const handleSignOut = async () => {
     const { error } = await authClient.signOut();
@@ -386,6 +500,7 @@ function TradeContent() {
           quantity,
           leverage,
           accountType,
+          duration, // Send duration
         }),
       });
 
@@ -406,6 +521,8 @@ function TradeContent() {
         quantity,
         pnl: 0,
         timestamp: new Date().toLocaleTimeString(),
+        // Add expiration time for client-side tracking
+        expiresAt: Date.now() + duration * 60000,
       };
 
       setPositions([...positions, newPosition]);
@@ -916,9 +1033,10 @@ function TradeContent() {
           {/* Main Chart - EXPANDED VIEW */}
           <div className="flex-1 bg-[#131722] relative min-h-[500px]">
             {selectedAsset ? (
-              <TradingViewChart
-                symbol={selectedAsset.symbol}
-                interval={chartInterval}
+              <LiveLineChart
+                symbol={selectedAsset.name}
+                currentPrice={selectedAsset.buy}
+                height={500}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400">
@@ -928,6 +1046,14 @@ function TradeContent() {
                 </div>
               </div>
             )}
+
+            <WinLossPopup
+              isOpen={popupState.isOpen}
+              onClose={() => setPopupState(prev => ({ ...prev, isOpen: false }))}
+              result={popupState.result}
+              amount={popupState.amount}
+              asset={popupState.asset}
+            />
           </div>
 
           {/* Bottom Tabs - Positions & History - COMPACT */}
@@ -1072,6 +1198,25 @@ function TradeContent() {
                       : ""}
                   </span>
                 </div>
+
+                <div className="mb-3">
+                  <label className="text-xs text-gray-400 block mb-1">Duration</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[1, 2, 5].map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setDuration(m)}
+                        className={`px-2 py-1.5 text-xs rounded border ${duration === m
+                          ? "bg-[#ff8516] border-[#ff8516] text-white"
+                          : "bg-[#0d0f15] border-[#2a2d3a] text-gray-400 hover:border-gray-500"
+                          }`}
+                      >
+                        {m} min
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label className="text-xs text-gray-400 block mb-1">Invest ($)</label>

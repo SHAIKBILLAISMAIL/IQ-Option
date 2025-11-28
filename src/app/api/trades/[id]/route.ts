@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser(request);
@@ -17,7 +17,7 @@ export async function PUT(
       );
     }
 
-    const id = params.id;
+    const { id } = await params;
     if (!id || isNaN(parseInt(id))) {
       return NextResponse.json(
         { error: 'Valid trade ID is required', code: 'INVALID_ID' },
@@ -146,7 +146,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser(request);
@@ -157,7 +157,7 @@ export async function DELETE(
       );
     }
 
-    const id = params.id;
+    const { id } = await params;
     if (!id || isNaN(parseInt(id))) {
       return NextResponse.json(
         { error: 'Valid trade ID is required', code: 'INVALID_ID' },
@@ -166,7 +166,7 @@ export async function DELETE(
     }
 
     const tradeId = parseInt(id);
-    
+
     // Try to parse request body, but provide default if empty
     let body;
     try {
@@ -176,7 +176,7 @@ export async function DELETE(
       console.error('Failed to parse request body:', parseError);
       body = {};
     }
-    
+
     const { exitPrice, pnl } = body;
 
     // Security check: reject if userId provided in body

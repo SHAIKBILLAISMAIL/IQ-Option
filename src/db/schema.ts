@@ -143,6 +143,8 @@ export const trades = sqliteTable('trades', {
   pnl: real('pnl').notNull().default(0.00),
   status: text('status').notNull().default('open'),
   accountType: text('account_type').notNull().default('practice'),
+  duration: integer('duration'), // Duration in minutes
+  expiresAt: integer('expires_at', { mode: 'timestamp' }), // Expiration time
   openedAt: integer('opened_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
