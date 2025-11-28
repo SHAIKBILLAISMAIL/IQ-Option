@@ -35,8 +35,7 @@ export async function POST(request: NextRequest) {
         formData.append('currency', currency);
         formData.append('success_url', `${SITE_URL}/api/rupantorpay/callback`);
         formData.append('cancel_url', `${SITE_URL}/trade?payment=cancelled`);
-        // Remove webhook_url for localhost to avoid validation issues
-        // formData.append('webhook_url', `${SITE_URL}/api/rupantorpay/callback`);
+        formData.append('webhook_url', `${SITE_URL}/api/rupantorpay/callback`); // For real-time updates
 
         console.log('Creating RupantorPay charge (Form Data):', Object.fromEntries(formData));
 
