@@ -24,8 +24,17 @@ import {
   DollarSign,
   Minus,
   Square,
-  Banknote
+  Banknote,
+  User,
+  Mail,
+  ShieldCheck,
+  CreditCard
 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useBatchMarketData } from "@/hooks/useMarketData";
 import { getAssetsByCategory } from "@/lib/market-data";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -552,7 +561,11 @@ function TradeContent() {
       <DepositDialog
         open={depositDialogOpen}
         onOpenChange={setDepositDialogOpen}
-        onDepositSuccess={handleDepositSuccess}
+        onDepositSuccess={(amount) => {
+          loadUserBalance();
+          setDepositDialogOpen(false);
+        }}
+        user={session?.user}
       />
       <WithdrawDialog
         open={withdrawDialogOpen}
@@ -678,6 +691,76 @@ function TradeContent() {
               </div>
             </div>
           </div>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="p-2 hover:bg-[#1a1d29] rounded-full transition-colors">
+                <User size={20} className="text-gray-400 hover:text-white" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 bg-[#1a1d29] border-[#2a2d3a] text-white p-0">
+              <div className="p-4 border-b border-[#2a2d3a]">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-[#ff8516] rounded-full flex items-center justify-center text-white font-bold text-xl">
+                    {session?.user?.email?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                  <div>
+                    <div className="font-bold">{session?.user?.name || 'User'}</div>
+                    <div className="text-xs text-gray-400">{session?.user?.email}</div>
+                    <div className="text-[10px] text-gray-500 mt-1">ID: {session?.user?.id?.slice(0, 8) || '8739201'}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-2">
+                <div className="flex items-center gap-3 p-2 hover:bg-[#2a2d3a] rounded cursor-pointer transition-colors">
+                  <div className="p-2 bg-[#2a2d3a] rounded text-blue-400">
+                    <ShieldCheck size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">Verification Status</div>
+                    <div className="text-xs text-green-500">Verified</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-2 hover:bg-[#2a2d3a] rounded cursor-pointer transition-colors">
+                  <div className="p-2 bg-[#2a2d3a] rounded text-green-400">
+                    <CreditCard size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">Payment Methods</div>
+                    <div className="text-xs text-gray-400">2 Active Cards</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-2 hover:bg-[#2a2d3a] rounded cursor-pointer transition-colors">
+                  <div className="p-2 bg-[#2a2d3a] rounded text-purple-400">
+                    <User size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">Phone Number</div>
+                    <div className="text-xs text-gray-400">+1 (555) 000-0000</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-2 hover:bg-[#2a2d3a] rounded cursor-pointer transition-colors">
+                  <div className="p-2 bg-[#2a2d3a] rounded text-orange-400">
+                    <History size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">Trading History</div>
+                    <div className="text-xs text-gray-400">View all trades</div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-2 border-t border-[#2a2d3a]">
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-2 p-2 text-red-400 hover:bg-[#2a2d3a] rounded transition-colors text-sm font-medium"
+                >
+                  <LogOut size={16} />
+                  Sign Out
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+
           <button
             onClick={() => setDepositDialogOpen(true)}
             className="px-4 py-1.5 bg-[#00c853] hover:bg-[#00d65f] rounded text-sm font-semibold flex items-center gap-2"
@@ -691,9 +774,6 @@ function TradeContent() {
           >
             <Banknote size={16} />
             Withdraw
-          </button>
-          <button onClick={handleSignOut} className="p-2 hover:bg-[#1a1d29] rounded" title="Sign Out">
-            <LogOut size={18} />
           </button>
         </div>
       </header>

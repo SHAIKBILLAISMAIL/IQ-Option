@@ -101,11 +101,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validPaymentMethods = ['card', 'crypto', 'bank_transfer'];
+    const validPaymentMethods = ['card', 'crypto', 'bank_transfer', 'rupantorpay'];
     if (!validPaymentMethods.includes(paymentMethod)) {
       return NextResponse.json(
         {
-          error: 'Invalid payment method. Must be one of: card, crypto, bank_transfer',
+          error: 'Invalid payment method. Must be one of: card, crypto, bank_transfer, rupantorpay',
           code: 'INVALID_PAYMENT_METHOD',
         },
         { status: 400 }

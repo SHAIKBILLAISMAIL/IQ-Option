@@ -8,9 +8,9 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser(request);
     if (!user) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Authentication required',
-        code: 'UNAUTHORIZED' 
+        code: 'UNAUTHORIZED'
       }, { status: 401 });
     }
 
@@ -20,16 +20,16 @@ export async function GET(request: NextRequest) {
       .limit(1);
 
     if (balance.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Balance not found',
-        code: 'BALANCE_NOT_FOUND' 
+        code: 'BALANCE_NOT_FOUND'
       }, { status: 404 });
     }
 
     return NextResponse.json(balance[0]);
   } catch (error) {
     console.error('GET error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error'),
       code: 'INTERNAL_ERROR'
     }, { status: 500 });
@@ -40,18 +40,27 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser(request);
     if (!user) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Authentication required',
-        code: 'UNAUTHORIZED' 
+        code: 'UNAUTHORIZED'
       }, { status: 401 });
     }
 
-    const requestBody = await request.json();
-    
+    let requestBody = {};
+    try {
+      const text = await request.text();
+      if (text) {
+        requestBody = JSON.parse(text);
+      }
+    } catch (e) {
+      // If parsing fails, assume empty body or invalid JSON, but don't crash
+      console.warn('Failed to parse request body:', e);
+    }
+
     if ('userId' in requestBody || 'user_id' in requestBody) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED" 
+        code: "USER_ID_NOT_ALLOWED"
       }, { status: 400 });
     }
 
@@ -61,9 +70,9 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (existingBalance.length > 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Balance already exists',
-        code: 'BALANCE_EXISTS' 
+        code: 'BALANCE_EXISTS'
       }, { status: 400 });
     }
 
@@ -82,7 +91,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(newBalance[0], { status: 201 });
   } catch (error) {
     console.error('POST error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error'),
       code: 'INTERNAL_ERROR'
     }, { status: 500 });
@@ -93,41 +102,41 @@ export async function PUT(request: NextRequest) {
   try {
     const user = await getCurrentUser(request);
     if (!user) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Authentication required',
-        code: 'UNAUTHORIZED' 
+        code: 'UNAUTHORIZED'
       }, { status: 401 });
     }
 
     const requestBody = await request.json();
-    
+
     if ('userId' in requestBody || 'user_id' in requestBody) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "User ID cannot be provided in request body",
-        code: "USER_ID_NOT_ALLOWED" 
+        code: "USER_ID_NOT_ALLOWED"
       }, { status: 400 });
     }
 
     const { balance, realBalance, currency } = requestBody;
 
     if (balance !== undefined && typeof balance !== 'number') {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Balance must be a number',
-        code: 'INVALID_BALANCE_TYPE' 
+        code: 'INVALID_BALANCE_TYPE'
       }, { status: 400 });
     }
 
     if (realBalance !== undefined && typeof realBalance !== 'number') {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Real balance must be a number',
-        code: 'INVALID_REAL_BALANCE_TYPE' 
+        code: 'INVALID_REAL_BALANCE_TYPE'
       }, { status: 400 });
     }
 
     if (currency !== undefined && typeof currency !== 'string') {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Currency must be a string',
-        code: 'INVALID_CURRENCY_TYPE' 
+        code: 'INVALID_CURRENCY_TYPE'
       }, { status: 400 });
     }
 
@@ -137,9 +146,9 @@ export async function PUT(request: NextRequest) {
       .limit(1);
 
     if (existingBalance.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Balance not found',
-        code: 'BALANCE_NOT_FOUND' 
+        code: 'BALANCE_NOT_FOUND'
       }, { status: 404 });
     }
 
@@ -167,7 +176,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(updated[0]);
   } catch (error) {
     console.error('PUT error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error'),
       code: 'INTERNAL_ERROR'
     }, { status: 500 });
