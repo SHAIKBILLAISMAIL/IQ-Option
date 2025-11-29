@@ -168,6 +168,12 @@ function TradeContent() {
   // Fetch real-time market data
   const { data: marketData, loading: marketLoading, error: marketError, refetch: refetchMarket } = useBatchMarketData(symbolNames, 5000);
 
+  // Keep track of latest market data for interval checks
+  const marketDataRef = useRef(marketData);
+  useEffect(() => {
+    marketDataRef.current = marketData;
+  }, [marketData]);
+
   // Load user balance on mount
   useEffect(() => {
     if (session?.user) {
@@ -364,10 +370,19 @@ function TradeContent() {
 
         if (expiredPositions.length > 0) {
           expiredPositions.forEach(pos => {
+            // Get latest price from ref
+            const latestData = marketDataRef.current[pos.asset];
+            let exitPrice = pos.currentPrice;
+
+            if (latestData) {
+              // If Buy, we exit at Bid. If Sell, we exit at Ask.
+              exitPrice = pos.direction === 'buy' ? latestData.bid : latestData.ask;
+            }
+
             // Calculate result
             const isWin = pos.direction === 'buy'
-              ? pos.currentPrice > pos.entryPrice
-              : pos.currentPrice < pos.entryPrice;
+              ? exitPrice > pos.entryPrice
+              : exitPrice < pos.entryPrice;
 
             const profit = isWin ? pos.amount * 0.85 : 0; // 85% profit
             const totalReturn = isWin ? pos.amount + profit : 0;
@@ -410,7 +425,7 @@ function TradeContent() {
               direction: pos.direction,
               amount: pos.amount,
               entryPrice: pos.entryPrice,
-              exitPrice: pos.currentPrice,
+              exitPrice: exitPrice,
               pnl: isWin ? profit : -pos.amount,
               openedAt: pos.timestamp,
               closedAt: new Date().toLocaleTimeString()
@@ -427,7 +442,7 @@ function TradeContent() {
                   Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                  exitPrice: pos.currentPrice,
+                  exitPrice: exitPrice,
                   pnl: isWin ? profit : -pos.amount,
                 }),
               }).catch(err => console.error("Failed to close trade on server:", err));
